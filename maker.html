@@ -27,6 +27,13 @@
       <span class="toggle-label">overlay mode</span>
     </div>
 
+    <!-- new speed control -->
+    <div class="speed-control">
+      <label for="speedRange">speed (delay per frame ms): </label>
+      <input type="range" id="speedRange" min="20" max="200" step="10" value="70" />
+      <span id="speedValue">70</span>
+    </div>
+
     <canvas id="previewCanvas"></canvas>
 
     <div class="controls button-group">
@@ -48,6 +55,8 @@
     const gifPreview       = document.getElementById('gifPreview');
     const previewCtx       = previewCanvas.getContext('2d');
     const overlayModeCheck = document.getElementById('overlayModeCheckbox');
+    const speedRange       = document.getElementById('speedRange');
+    const speedValue       = document.getElementById('speedValue');
 
     const shlorpImg = new Image();
     shlorpImg.src = './assets/shlorp-nobg.png';
@@ -79,6 +88,11 @@
         userImg.src = evt.target.result;
       };
       reader.readAsDataURL(file);
+    });
+
+    // update displayed speed value
+    speedRange.addEventListener('input', () => {
+      speedValue.textContent = speedRange.value;
     });
 
     createGifBtn.addEventListener('click', () => {
@@ -115,13 +129,15 @@
       });
 
       const overlayMode = overlayModeCheck.checked;
-      buildFrames(gif, canvas, ctx, overlayMode);
+      const frameDelay = parseInt(speedRange.value, 10);
+
+      buildFrames(gif, canvas, ctx, overlayMode, frameDelay);
     });
 
-    function buildFrames(gif, canvas, ctx, overlayMode) {
+    function buildFrames(gif, canvas, ctx, overlayMode, frameDelay) {
       const totalFrames = 24;
-      const amplitude   = 8;
-      const waveFreq    = 0.06;
+      const amplitude = 8;
+      const waveFreq = 0.06;
 
       const shlorpRatio = shlorpImg.height / shlorpImg.width;
 
@@ -162,8 +178,8 @@
           ctx.restore();
         }
 
-        const shlorpScale  = 0.3;
-        const shlorpWidth  = canvas.width * shlorpScale;
+        const shlorpScale = 0.3;
+        const shlorpWidth = canvas.width * shlorpScale;
         const shlorpHeight = shlorpWidth * shlorpRatio;
         const shlorpX = -(canvas.width / 15);
         const shlorpY = waterLine - shlorpHeight + (shlorpHeight * 0.0738);
@@ -177,7 +193,7 @@
         );
         ctx.restore();
 
-        gif.addFrame(ctx.getImageData(0, 0, canvas.width, canvas.height), { delay: 70 });
+        gif.addFrame(ctx.getImageData(0, 0, canvas.width, canvas.height), { delay: frameDelay });
       }
 
       gif.render();

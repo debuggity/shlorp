@@ -176,3 +176,24 @@ input:checked + .slider:before {
 .slider.round {
   border-radius: 24px;
 }
+
+/* new speed control */
+.speed-control {
+  margin-top: 1rem;
+}
+
+.speed-control label {
+  font-weight: 500;
+  color: #333;
+  margin-right: 0.5rem;
+}
+
+#speedRange {
+  width: 200px;
+  margin-right: 0.5rem;
+}
+
+#speedValue {
+  font-weight: bold;
+  color: #6200ee;
+}
