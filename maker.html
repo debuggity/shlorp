@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>shlorp drinking gif maker</title>
+  <link rel="stylesheet" href="./css/style.css" />
+</head>
+<body>
+
+  <div class="home-button">
+    <a href="index.html">home</a>
+  </div>  
+
+  <div class="container">
+    <h1>make a shlorp drinking gif</h1>
+
+    <!-- upload input + custom label -->
+    <div class="controls">
+      <label for="uploadInput" class="custom-upload-btn">choose an image</label>
+      <input type="file" id="uploadInput" accept="image/*" />
+    </div>
+
+    <!-- overlay mode toggle -->
+    <div class="toggle-container">
+      <label class="toggle-switch">
+        <input type="checkbox" id="overlayModeCheckbox" checked />
+        <span class="slider round"></span>
+      </label>
+      <span class="toggle-label">overlay mode</span>
+    </div>
+
+    <!-- preview the uploaded image -->
+    <canvas id="previewCanvas"></canvas>
+
+    <!-- buttons to generate and download the gif -->
+    <div class="controls button-group">
+      <button class="btn" id="createGifBtn" disabled>create shlorp gif</button>
+      <button class="btn" id="downloadGifBtn" style="display:none;">download gif</button>
+    </div>
+
+    <!-- preview the generated gif -->
+    <img id="gifPreview" alt="generated gif preview" />
+
+  </div>
+
+  <!-- include local gif.js library -->
+  <script src="./js/gif.js"></script>
+
+  <script>
+    // ---- dom elements ----
+    const uploadInput      = document.getElementById('uploadInput');
+    const previewCanvas    = document.getElementById('previewCanvas');
+    const createGifBtn     = document.getElementById('createGifBtn');
+    const downloadGifBtn   = document.getElementById('downloadGifBtn');
+    const gifPreview       = document.getElementById('gifPreview');
+    const previewCtx       = previewCanvas.getContext('2d');
+    const overlayModeCheck = document.getElementById('overlayModeCheckbox');
+
+    // ---- load shlorp image ----
+    const shlorpImg = new Image();
+    shlorpImg.src = './assets/shlorp-nobg.png';
+
+    // ---- store user’s uploaded image ----
+    let userImg = new Image();
+
+    // helper to scale images into a 752x752 bounding box
+    function fitTo752(img) {
+      const maxSize = 752;
+      const scale = Math.min(maxSize / img.width, maxSize / img.height);
+      const newWidth = Math.round(img.width * scale);
+      const newHeight = Math.round(img.height * scale);
+      return { newWidth, newHeight };
+    }
+
+    // ---- when user selects an image ----
+    uploadInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        userImg.onload = () => {
+          // scale image to 752 bounding box
+          const { newWidth, newHeight } = fitTo752(userImg);
+
+          // resize preview canvas and draw scaled image
+          previewCanvas.width = newWidth;
+          previewCanvas.height = newHeight;
+          previewCtx.clearRect(0, 0, newWidth, newHeight);
+          previewCtx.drawImage(userImg, 0, 0, newWidth, newHeight);
+
+          // enable "create gif" button
+          createGifBtn.disabled = false;
+        };
+        userImg.src = evt.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // ---- when clicking "create shlorp gif" ----
+    createGifBtn.addEventListener('click', () => {
+      if (!userImg.src) return;
+
+      // disable button & hide previous preview
+      createGifBtn.disabled = true;
+      gifPreview.style.display = 'none';
+      downloadGifBtn.style.display = 'none';
+
+      // set up in-memory canvas to match preview's scaled size
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = previewCanvas.width;
+      canvas.height = previewCanvas.height;
+
+      // create a new gif instance
+      const gif = new GIF({
+        workers: 2,
+        quality: 10,
+        workerScript: './js/gif.worker.js'
+      });
+
+      // when gif finishes rendering
+      gif.on('finished', (blob) => {
+        const gifURL = URL.createObjectURL(blob);
+        gifPreview.src = gifURL;
+        gifPreview.style.display = 'block';
+        downloadGifBtn.style.display = 'inline-block';
+        createGifBtn.disabled = false;
+
+        downloadGifBtn.onclick = () => {
+          const a = document.createElement('a');
+          a.href = gifURL;
+          a.download = 'shlorp.gif';
+          a.click();
+        };
+      });
+
+      // figure out if overlay mode is on
+      const overlayMode = overlayModeCheck.checked;
+
+      // build frames w/ wave effect
+      buildFrames(gif, canvas, ctx, overlayMode);
+    });
+
+    // ---- build frames with wave effect, with or without overlay mode ----
+    function buildFrames(gif, canvas, ctx, overlayMode) {
+      const totalFrames = 40;
+      const amplitude   = 8;
+      const waveFreq    = 0.06;
+
+      // precompute shlorp ratio
+      const shlorpRatio = shlorpImg.height / shlorpImg.width;
+
+      for (let i = 0; i <= totalFrames; i++) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // if overlay mode is on, draw entire user image first
+        if (overlayMode) {
+          ctx.drawImage(userImg, 0, 0, userImg.width, userImg.height,
+            0, 0, canvas.width, canvas.height);
+        }
+
+        // compute water line in scaled coords
+        const waterLine = canvas.height * (i / totalFrames);
+
+        if (!overlayMode) {
+          // wave-distort everything below waterLine
+          for (let y = waterLine; y < canvas.height; y++) {
+            const offset = amplitude * Math.sin(y * waveFreq + i * 0.5);
+            const srcY = Math.floor((y / canvas.height) * userImg.height);
+            ctx.drawImage(
+              userImg,
+              0, srcY, userImg.width, 1,
+              offset, y, canvas.width, 1
+            );
+          }
+        } else {
+          // wave-distort bottom portion and then tint it
+          for (let y = waterLine; y < canvas.height; y++) {
+            const offset = amplitude * Math.sin(y * waveFreq + i * 0.5);
+            const srcY = Math.floor((y / canvas.height) * userImg.height);
+            ctx.drawImage(
+              userImg,
+              0, srcY, userImg.width, 1,
+              offset, y, canvas.width, 1
+            );
+          }
+
+          // overlay a partial blue to simulate water
+          ctx.save();
+          ctx.globalCompositeOperation = 'source-atop';
+          ctx.fillStyle = 'rgba(0, 0, 255, 0.2)';
+          ctx.fillRect(0, waterLine, canvas.width, canvas.height - waterLine);
+          ctx.restore();
+        }
+
+        // place shlorp
+        const shlorpScale  = 0.3;
+        const shlorpWidth  = canvas.width * shlorpScale;
+        const shlorpHeight = shlorpWidth * shlorpRatio;
+        const shlorpX = -(canvas.width / 15);
+        const shlorpY = waterLine - shlorpHeight + (shlorpHeight * 0.0738);
+
+        // flip horizontally so it matches original direction
+        ctx.save();
+        ctx.scale(-1, 1);
+        ctx.drawImage(
+          shlorpImg,
+          0, 0, shlorpImg.width, shlorpImg.height,
+          -shlorpWidth, shlorpY, shlorpWidth, shlorpHeight
+        );
+        ctx.restore();
+
+        // add frame
+        gif.addFrame(ctx.getImageData(0, 0, canvas.width, canvas.height), { delay: 70 });
+      }
+
+      // finalize gif
+      gif.render();
+    }
+  </script>
+</body>
+</html>
